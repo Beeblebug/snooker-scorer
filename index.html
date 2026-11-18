@@ -937,7 +937,7 @@ const DRILLS=[
  {id:'circle',name:'Reds Round the Blue',type:'break',level:'Intermediate',
   short:'8 reds in a circle around the blue. Cue-ball control in the open.',
   setup:'Put the blue on its spot with 8 reds evenly spaced in a circle around it, about 26 cm (10 inches) from the blue, so there are at least two balls’ width of space between each red. Place the pink and black on their spots.'+HAND,
-  play:'Pot each red, then the black, pink or blue, and work your way round the circle. Try not to disturb the blue until the reds have gone.',
+  play:'Pot each red, then the black, pink or blue, and work your way round the circle. For a more difficult challenge, only use pink & black until all reds are potted.',
   score:'Each attempt is one break. All 8 reds with blacks, then blue, pink and black, is 82.',
   balls:[[...SP.blue,'blue'],[...SP.pink,'pink'],[...SP.black,'black'],...[0,45,90,135,180,225,270,315].map(a=>[89+26*Math.cos(a*Math.PI/180),178.5+26*Math.sin(a*Math.PI/180),'red'])],cue:[70,230]},
  {id:'long-blue',name:'Long Blue',type:'attempts',of:10,level:'All levels',
