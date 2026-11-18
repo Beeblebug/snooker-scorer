@@ -1,5 +1,5 @@
 // Snooker Scorer offline cache. Bump VERSION whenever any file changes.
-const VERSION = 'snooker-v6';
+const VERSION = 'snooker-v7';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './firebase-config.js', './firebase-bundle.js'];
 
 self.addEventListener('install', e => {
