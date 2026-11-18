@@ -130,6 +130,8 @@ td.better{color:var(--accent);font-weight:700}
 .coin.spin{animation:flip 1.4s cubic-bezier(.2,.7,.3,1)}
 @keyframes flip{0%{transform:translateY(0) rotateX(0)}45%{transform:translateY(-70px) rotateX(1080deg)}100%{transform:translateY(0) rotateX(1800deg)}}
 .tossres{text-align:center;font-size:20px;font-weight:700;min-height:28px}
+.pill{display:inline-block;font-size:13px;padding:5px 11px;border-radius:999px;background:var(--card);margin:-6px 0 10px;border:1px solid var(--line)}.pill.ok{color:var(--good)}.pill.warn{color:var(--accent)}
+.code{font-size:34px;font-weight:800;letter-spacing:.12em;text-align:center;background:var(--card);border-radius:14px;padding:16px;margin:8px 0 12px;font-variant-numeric:tabular-nums;user-select:all;-webkit-user-select:all}
 .twobtn{display:grid;grid-template-columns:1fr 1fr;gap:8px}.twobtn .btn{margin:0}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 </style>
@@ -138,6 +140,8 @@ td.better{color:var(--accent);font-weight:700}
 <div id="app"></div>
 <div id="sheet" class="sheet hidden"></div>
 <div id="toast"></div>
+<script src="firebase-config.js"></script>
+<script src="firebase-bundle.js"></script>
 <script>
 "use strict";
 /* ---------- constants & helpers ---------- */
@@ -166,13 +170,155 @@ function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open('snooke
 function idbAll(store){return new Promise((res,rej)=>{const q=idb.transaction(store).objectStore(store).getAll();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
 function idbTx(store,fn){return new Promise((res,rej)=>{const tx=idb.transaction(store,'readwrite');fn(tx.objectStore(store));tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error);});}
 async function persist(col,obj){
+  if(S.group&&fb){window.FB.setDoc(gdoc(S.group.id,col,obj.id),clone(obj)).catch(syncErr);return;}
   if(!idb){lsSave();return;}
   try{await idbTx(col,st=>st.put(clone(obj)));}catch(e){toast('Couldn’t save — storage on this device may be full.');}
 }
 async function removeDoc(col,id){
+  if(S.group&&fb){window.FB.deleteDoc(gdoc(S.group.id,col,id)).catch(syncErr);return;}
   if(!idb){lsSave();return;}
   try{await idbTx(col,st=>st.delete(id));}catch(e){toast('Couldn’t delete just now.');}
 }
+function syncErr(e){
+  if(e&&e.code==='permission-denied'){S.note='This phone is no longer allowed into the group. Leave the group and join again with the code.';render();}
+  else toast('Couldn’t sync that change.');
+}
+
+/* ---------- group sync (Firebase) ---------- */
+const GKEY='snooker-group';
+function groupCfg(){try{return JSON.parse(localStorage.getItem(GKEY)||'null');}catch(e){return null;}}
+function setGroupCfg(g){try{if(g)localStorage.setItem(GKEY,JSON.stringify(g));else localStorage.removeItem(GKEY);}catch(e){}}
+const fbConfigured=()=>!!(window.FB&&window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey&&window.FIREBASE_CONFIG.apiKey.indexOf('PASTE')<0);
+let fb=null,unsubs=[];
+S.group=null;S.sync={state:'off',pending:false};
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,r)=>setTimeout(()=>r(Object.assign(new Error('timeout'),{code:'timeout'})),ms))]);
+function fbInit(){
+  if(fb)return fb;
+  const F=window.FB;const app=F.initializeApp(window.FIREBASE_CONFIG);
+  let fs;
+  try{fs=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()}),ignoreUndefinedProperties:true});}
+  catch(e){fs=F.initializeFirestore(app,{ignoreUndefinedProperties:true});}
+  fb={app,fs,auth:F.getAuth(app)};return fb;
+}
+const gdoc=(gid,col,id)=>window.FB.doc(fb.fs,'groups',gid,col,id);
+const gcol=(gid,col)=>window.FB.collection(fb.fs,'groups',gid,col);
+function authUser(){return new Promise(res=>{const u=window.FB.onAuthStateChanged(fb.auth,user=>{u();res(user);});});}
+async function ensureSignedIn(){
+  fbInit();let u=await authUser();
+  if(!u)u=(await withTimeout(window.FB.signInAnonymously(fb.auth),20000)).user;
+  return u;
+}
+const CODE_CH='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+function genCode(){const a=new Uint32Array(8);crypto.getRandomValues(a);return Array.from(a,x=>CODE_CH[x%CODE_CH.length]).join('');}
+const fmtCode=c=>c.slice(0,4)+'-'+c.slice(4);
+const normCode=c=>String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function stopSync(){unsubs.forEach(u=>{try{u();}catch(e){}});unsubs=[];}
+async function startGroupSync(g){
+  stopSync();
+  S.group=g;S.mode='group';S.sync.state='connecting';render();
+  try{fbInit();}catch(e){S.sync.state='error';S.note='Sync couldn’t start on this device.';S.ready=true;render();return;}
+  let user=await authUser();
+  if(!user&&navigator.onLine){try{user=(await withTimeout(window.FB.signInAnonymously(fb.auth),20000)).user;}catch(e){}}
+  if(!user){S.sync.state='needsignin';S.ready=true;render();return;}
+  const F=window.FB;const gid=g.id;let gotP=false,gotM=false;
+  const timer=setTimeout(()=>{if(!S.ready){S.ready=true;render();}},8000);
+  const upd=()=>{if(gotP&&gotM){S.ready=true;clearTimeout(timer);}S.sync.state='on';render();};
+  const onErr=e=>{clearTimeout(timer);S.ready=true;S.sync.state='error';
+    S.note=e&&e.code==='permission-denied'?'This phone is no longer allowed into the group. Leave the group and join again with the code.':'Sync stopped. Close and reopen the app to reconnect.';render();};
+  unsubs.push(F.onSnapshot(gcol(gid,'players'),{includeMetadataChanges:true},snap=>{
+    const o={};snap.docs.forEach(d=>{o[d.id]=d.data();});S.players=o;gotP=true;upd();},onErr));
+  unsubs.push(F.onSnapshot(gcol(gid,'matches'),{includeMetadataChanges:true},snap=>{
+    const o={};snap.docs.forEach(d=>{const r=d.data();const loc=S.matches[d.id];o[d.id]=(loc&&(loc.updatedAt||0)>(r.updatedAt||0))?loc:r;});
+    S.matches=o;S.sync.pending=snap.metadata.hasPendingWrites;gotM=true;upd();},onErr));
+}
+async function uploadLocal(gid,locPlayers,locMatches){
+  const F=window.FB;
+  const remote=await withTimeout(F.getDocsFromServer(gcol(gid,'players')),20000);
+  const byName={};remote.forEach(d=>{const n=(d.data().name||'').toLowerCase();if(n)byName[n]=d.id;});
+  const map={},writes=[];
+  locPlayers.forEach(p=>{const ex=byName[p.name.toLowerCase()];if(ex){map[p.id]=ex;}else{map[p.id]=p.id;writes.push(['players',p.id,p]);}});
+  locMatches.forEach(m=>{const c=clone(m);c.p=c.p.map(x=>map[x]||x);writes.push(['matches',c.id,c]);});
+  for(let i=0;i<writes.length;i+=400){
+    const b=F.writeBatch(fb.fs);
+    writes.slice(i,i+400).forEach(([col,id,data])=>b.set(gdoc(gid,col,id),clone(data)));
+    await withTimeout(b.commit(),30000);
+  }
+}
+async function localSnapshot(){
+  if(!idb)return {players:Object.values(S.players),matches:Object.values(S.matches)};
+  const [ps,ms]=await Promise.all([idbAll('players'),idbAll('matches')]);return {players:ps,matches:ms};
+}
+let busy=false;
+async function createGroup(name){
+  if(busy)return;
+  if(!navigator.onLine){toast('You need an internet connection to create a group.');return;}
+  busy=true;sheetBusy('Creating your group…');
+  try{
+    const F=window.FB;const u=await ensureSignedIn();let gid=null;
+    for(let i=0;i<5&&!gid;i++){const c=genCode();
+      try{await withTimeout(F.setDoc(F.doc(fb.fs,'groups',c),{name,createdBy:u.uid,createdAt:Date.now()}),20000);gid=c;}
+      catch(e){if(!e||e.code!=='permission-denied')throw e;}}
+    if(!gid)throw new Error('nocode');
+    await withTimeout(F.setDoc(gdoc(gid,'members',u.uid),{joinedAt:Date.now()}),20000);
+    const loc=await localSnapshot();await uploadLocal(gid,loc.players,loc.matches);
+    const g={id:gid,name};setGroupCfg(g);closeSheet();await startGroupSync(g);
+    showCodeSheet();
+  }catch(e){closeSheet();toast(e&&e.code==='permission-denied'?'Firebase refused the request — check the security rules were published.':'Couldn’t create the group. Check your connection and try again.');}
+  busy=false;
+}
+async function joinGroup(input){
+  if(busy)return;
+  const gid=normCode(input);
+  if(gid.length!==8){toast('Codes are 8 letters and numbers, like ABCD-2345');return;}
+  if(!navigator.onLine){toast('You need an internet connection to join a group.');return;}
+  busy=true;sheetBusy('Joining…');
+  try{
+    const F=window.FB;const u=await ensureSignedIn();
+    try{await withTimeout(F.setDoc(gdoc(gid,'members',u.uid),{joinedAt:Date.now()}),20000);}
+    catch(e){if(e&&e.code==='permission-denied'){closeSheet();toast('No group found with that code.');busy=false;return;}throw e;}
+    const gs=await withTimeout(F.getDocFromServer(F.doc(fb.fs,'groups',gid)),20000);
+    const name=(gs.exists()&&gs.data().name)||'Snooker group';
+    const loc=await localSnapshot();await uploadLocal(gid,loc.players,loc.matches);
+    const g={id:gid,name};setGroupCfg(g);closeSheet();await startGroupSync(g);toast('Joined '+name);
+  }catch(e){closeSheet();toast('Couldn’t join the group. Check your connection and try again.');}
+  busy=false;
+}
+async function leaveGroup(){
+  const g=S.group;if(!g)return;
+  stopSync();
+  if(idb){try{const ps=Object.values(S.players),ms=Object.values(S.matches);
+    await idbTx('players',st=>ps.forEach(p=>st.put(clone(p))));await idbTx('matches',st=>ms.forEach(m=>st.put(clone(m))));}catch(e){}}
+  else lsSave();
+  try{if(fb&&fb.auth.currentUser)window.FB.deleteDoc(gdoc(g.id,'members',fb.auth.currentUser.uid)).catch(()=>{});}catch(e){}
+  setGroupCfg(null);S.group=null;S.mode=idb?'device':'local';S.sync={state:'off',pending:false};S.note='';
+  closeSheet();render();toast('Left '+g.name+'. This phone keeps a copy of everything so far.');
+}
+function sheetBusy(msg){sheet(`<h3>${esc(msg)}</h3><p>This only takes a few seconds.</p>`);}
+async function shareCode(){
+  const g=S.group;if(!g)return;
+  const text=`Join my snooker group “${g.name}” in Snooker Scorer: open https://beeblebug.github.io/snooker-scorer/ then tap Join a group and enter ${fmtCode(g.id)}`;
+  try{if(navigator.share){await navigator.share({text});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  try{await navigator.clipboard.writeText(text);toast('Invite copied');}catch(e){toast('Code: '+fmtCode(g.id));}
+}
+function showCodeSheet(){
+  const g=S.group;if(!g)return;
+  sheet(`<h3>${esc(g.name)}</h3><p>Anyone with this code can join and see, add and change the group’s players and matches.</p>
+    <div class="code">${fmtCode(g.id)}</div>
+    <button class="btn primary" data-act="shareCode">Share invite</button><button class="btn ghost" data-act="closeSheet">Done</button>`);
+}
+function syncPill(){
+  if(!S.group)return '';
+  let t,c='ok';
+  if(S.sync.state==='needsignin'){t='Connect to the internet once to start syncing';c='warn';}
+  else if(S.sync.state==='error'){t='Sync stopped';c='warn';}
+  else if(!navigator.onLine){t=S.sync.pending?'Offline · changes will sync':'Offline';c='warn';}
+  else if(S.sync.state==='connecting'||S.sync.pending){t='Syncing…';c='warn';}
+  else t='Synced';
+  return `<div class="pill ${c}">● ${esc(S.group.name)} · ${t}</div>`;
+}
+window.addEventListener('online',()=>{if(S.group&&S.sync.state==='needsignin')startGroupSync(S.group);else render();});
+window.addEventListener('offline',()=>render());
+
 let toastT;
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>t.style.display='none',3200);}
 let installEvt=null;
@@ -182,13 +328,14 @@ const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform===
 const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
 async function init(){
   render();
-  try{
-    idb=await idbOpen();
-    const [ps,ms]=await Promise.all([idbAll('players'),idbAll('matches')]);
-    ps.forEach(p=>{S.players[p.id]=p;});ms.forEach(m=>{S.matches[m.id]=m;});
-    S.mode='device';
-  }catch(e){idb=null;S.mode='local';lsLoad();}
-  S.ready=true;render();
+  try{idb=await idbOpen();}catch(e){idb=null;}
+  const g=groupCfg();
+  if(g&&fbConfigured()){startGroupSync(g);}
+  else{
+    if(idb){try{const [ps,ms]=await Promise.all([idbAll('players'),idbAll('matches')]);ps.forEach(p=>{S.players[p.id]=p;});ms.forEach(m=>{S.matches[m.id]=m;});S.mode='device';}catch(e){idb=null;}}
+    if(!idb){S.mode='local';lsLoad();}
+    S.ready=true;render();
+  }
   try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();}catch(e){}
   if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 }
@@ -378,11 +525,25 @@ function backupSection(){
   const lb=lastBackup();
   const n=Object.keys(S.matches).length;
   const stale=n>0&&(!lb||Date.now()-lb>14*864e5);
-  return `<h2>Your data</h2><div class="card" style="cursor:default">
-    <div class="small muted">Everything is saved on this device only, and works with no internet. Back up now and then so you don’t lose your history if the phone is lost or replaced.</div>
+  let h='';
+  if(fbConfigured()){
+    h+=`<h2>Sync</h2><div class="card" style="cursor:default">`;
+    if(S.group){
+      h+=`<div class="prow"><span class="nm">${esc(S.group.name)}</span><span class="rt">Code ${fmtCode(S.group.id)}</span></div>
+        <div class="small muted" style="margin:6px 0 10px">Everyone in this group shares the same players, matches and stats. Scoring works offline and syncs when there’s a connection.</div>
+        <div class="twobtn"><button class="btn" data-act="showCode">Invite</button><button class="btn ghost" data-act="askLeave">Leave group</button></div>`;
+    }else{
+      h+=`<div class="small muted" style="margin-bottom:10px">Share players, matches and stats with the people you play. Create a group, then send them its code. Scoring still works offline and catches up when there’s a connection.</div>
+        <div class="twobtn"><button class="btn" data-act="askCreate">Create a group</button><button class="btn ghost" data-act="askJoin">Join a group</button></div>`;
+    }
+    h+=`</div>`;
+  }
+  h+=`<h2>Backup</h2><div class="card" style="cursor:default">
+    <div class="small muted">${S.group?'Your group’s data is kept in the cloud and on this device. A backup file is an extra copy you control.':'Everything is saved on this device only, and works with no internet. Back up now and then so you don’t lose your history if the phone is lost or replaced.'}</div>
     <div class="small" style="margin:8px 0;${stale?'color:var(--accent)':''}">${lb?'Last backup: '+fmtDate(lb):'Not backed up yet'}</div>
     <div class="twobtn"><button class="btn" data-act="export" ${n||Object.keys(S.players).length?'':'disabled'}>Back up</button><button class="btn ghost" data-act="importPick">Restore</button></div>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none"></div>`;
+  return h;
 }
 function matchCard(m){
   const f0=framesWon(m,0),f1=framesWon(m,1);
@@ -396,7 +557,7 @@ function sortedMatches(){return Object.values(S.matches).sort((a,b)=>(b.startedA
 function sortedPlayers(){return Object.values(S.players).sort((a,b)=>a.name.localeCompare(b.name));}
 
 function vHome(){
-  let h=`<h1>Snooker Scorer</h1>`+banner()+installHint();
+  let h=`<h1>Snooker Scorer</h1>`+syncPill()+banner()+installHint();
   if(!S.ready)return h+`<p class="empty">Loading…</p>`;
   const all=sortedMatches();
   const live=all.filter(m=>m.status==='live');
@@ -633,6 +794,14 @@ const ACTIONS={
   openPlayer:el=>go('player',el.dataset.id),
   addPlayer:()=>addPlayer(),
   export:()=>exportData(),
+  askCreate:()=>{sheet(`<h3>Create a group</h3><p>Give it a name everyone will recognise. Your players and matches on this phone will be added to it.</p><input type="text" id="grpName" maxlength="40" placeholder="e.g. Thursday snooker" style="margin:6px 0 10px"><button class="btn primary" data-act="doCreate">Create group</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);setTimeout(()=>{const i=document.getElementById('grpName');if(i)i.focus();},50);},
+  doCreate:()=>{const i=document.getElementById('grpName');const n=i&&i.value.trim();if(!n){if(i)i.focus();return;}createGroup(n);},
+  askJoin:()=>{sheet(`<h3>Join a group</h3><p>Enter the code someone in the group sent you. Your players and matches on this phone will be added to the group, and players with the same name are merged.</p><input type="text" id="grpCode" maxlength="9" placeholder="ABCD-2345" autocapitalize="characters" autocomplete="off" style="margin:6px 0 10px;text-transform:uppercase;letter-spacing:.1em"><button class="btn primary" data-act="doJoin">Join group</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);setTimeout(()=>{const i=document.getElementById('grpCode');if(i)i.focus();},50);},
+  doJoin:()=>{const i=document.getElementById('grpCode');joinGroup(i&&i.value);},
+  showCode:()=>showCodeSheet(),
+  shareCode:()=>shareCode(),
+  askLeave:()=>{sheet(`<h3>Leave ${esc(S.group.name)}?</h3><p>This phone keeps a copy of everything synced so far, but you’ll stop seeing new matches from the group. You can rejoin any time with the code ${fmtCode(S.group.id)}.</p><button class="btn danger" data-act="doLeave">Leave group</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);},
+  doLeave:()=>leaveGroup(),
   importPick:()=>{const i=document.getElementById('importFile');if(i)i.click();},
   install:async()=>{if(!installEvt)return;installEvt.prompt();try{await installEvt.userChoice;}catch(e){}installEvt=null;render();},
   brk:el=>{S.draft.brk=+el.dataset.i;S.draft.brkTouched=true;render();},
@@ -669,7 +838,7 @@ const ACTIONS={
     sheet(`<h3>Finish match now?</h3><p>The result will be recorded on frames won (${framesWon(m,0)}–${framesWon(m,1)}).${inProg?' The frame in progress won’t count.':''}</p><button class="btn primary" data-act="finish">Finish match</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);},
   finish:()=>{const m=curMatch();if(!m)return;finishMatch(m);go('match',m.id);},
   askDeleteMatch:el=>{const id=el.dataset.id;const m=S.matches[id];if(!m)return;
-    sheet(`<h3>Delete this match?</h3><p>${esc(pn(m.p[0]))} v ${esc(pn(m.p[1]))}, ${fmtDate(m.startedAt)}. Its frames and breaks will be removed from everyone’s stats. This can’t be undone.</p><button class="btn danger" data-act="deleteMatch" data-id="${esc(id)}">Delete match</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);},
+    sheet(`<h3>Delete this match?</h3><p>${esc(pn(m.p[0]))} v ${esc(pn(m.p[1]))}, ${fmtDate(m.startedAt)}. Its frames and breaks will be removed from everyone’s stats${S.group?', on every phone in the group':''}. This can’t be undone.</p><button class="btn danger" data-act="deleteMatch" data-id="${esc(id)}">Delete match</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);},
   deleteMatch:el=>{const id=el.dataset.id;delete S.matches[id];delete undoStacks[id];removeDoc('matches',id);go('history');},
   deletePlayer:el=>{const id=el.dataset.id;const p=S.players[id];if(!p)return;
     sheet(`<h3>Delete ${esc(p.name)}?</h3><p>They have no matches, so nothing else is affected.</p><button class="btn danger" data-act="confirmDeletePlayer" data-id="${esc(id)}">Delete player</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);},
@@ -694,6 +863,8 @@ document.addEventListener('change',e=>{
 document.addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;
   if(e.target.id==='addName'){e.preventDefault();addPlayer();}
+  else if(e.target.id==='grpName'){e.preventDefault();ACTIONS.doCreate();}
+  else if(e.target.id==='grpCode'){e.preventDefault();ACTIONS.doJoin();}
   else if(e.target.id==='renameInp'){e.preventDefault();const b=document.querySelector('[data-act="saveRename"]');if(b)ACTIONS.saveRename(b);}
 });
 init();
