@@ -914,49 +914,50 @@ const SP={brown:[89,283.3],yellow:[118.2,283.3],green:[59.8,283.3],blue:[89,178.
 const BCOL={red:'#c8102e',yellow:'#f2c94c',green:'#1f8a3b',brown:'#7b4a24',blue:'#1e56c8',pink:'#f4a3c0',black:'#161616',cue:'#f7f4ea'};
 const allColours=()=>['yellow','green','brown','blue','pink','black'].map(c=>[...SP[c],c]);
 const reds=ys=>ys.map(([x,y])=>[x,y,'red']);
+const HAND=' The cue ball starts in hand: place it anywhere in the D.';
 const DRILLS=[
  {id:'lineup',name:'The Line-Up',type:'break',level:'All levels',
   short:'15 reds in a line up the middle. The classic break-building drill.',
-  setup:'Put the colours on their spots. Place the 15 reds in a straight line along the middle of the table: four between the brown and the blue, seven between the blue and the pink, and four between the pink and the black. Start with the cue ball in the D.',
+  setup:'Put the colours on their spots. Place the 15 reds in a straight line along the middle of the table: four between the brown and the blue, seven between the blue and the pink, and four between the pink and the black.'+HAND,
   play:'Pot a red, then any colour, and keep going, just like a normal break. Once the reds are gone, clear the colours in order. Plan ahead: play the reds that are out of line first, and try to stay straight on the black or pink so you can stay in line.',
   score:'Each attempt is one break. Tap the balls as you pot them, then tap “End break” when you miss. 147 is the maximum.',
   balls:[...allColours(),...reds([[89,190],[89,201],[89,212],[89,223],[89,167],[89,156],[89,145],[89,134],[89,123],[89,112],[89,101],[89,78],[89,68],[89,58],[89,48]])],cue:[100,295]},
  {id:'colours',name:'Clear the Colours',type:'break',level:'All levels',
-  short:'Yellow to black from their spots, cue ball in the D.',
-  setup:'Put all six colours on their spots with no reds on the table. Place the cue ball anywhere in the D.',
+  short:'Yellow to black from their spots, cue ball in hand.',
+  setup:'Put all six colours on their spots with no reds on the table.'+HAND,
   play:'Pot the colours in order — yellow, green, brown, blue, pink, black — getting position on the next ball each time. The yellow-to-green and brown-to-blue shots are the key positional tests.',
   score:'Each attempt is one break. A full clearance is 27.',
   balls:allColours(),cue:[112,298]},
  {id:'t-drill',name:'The T',type:'break',level:'Intermediate',
   short:'10 reds in a T around the pink and black. Short-range control.',
-  setup:'Place the pink, black and blue on their spots. Put four reds in a row across the table level with the pink (two each side), four in a line between the pink and the black, and two just below the pink towards the blue. Cue ball starts near the blue.',
+  setup:'Place the pink, black and blue on their spots. Put four reds in a row across the table level with the pink (two each side), four in a line between the pink and the black, and two just below the pink towards the blue.'+HAND+' Your first shot is a long red.',
   play:'Pot reds and colours as a normal break, using mostly the black and pink. Keep the cue ball in the area around the pink — small, controlled shots win here.',
   score:'Each attempt is one break. All 10 reds with blacks plus pink and black is 93.',
-  balls:[[...SP.blue,'blue'],[...SP.pink,'pink'],[...SP.black,'black'],...reds([[65,89.25],[77,89.25],[101,89.25],[113,89.25],[89,78],[89,68],[89,58],[89,48],[89,101],[89,112]])],cue:[96,170]},
+  balls:[[...SP.blue,'blue'],[...SP.pink,'pink'],[...SP.black,'black'],...reds([[65,89.25],[77,89.25],[101,89.25],[113,89.25],[89,78],[89,68],[89,58],[89,48],[89,101],[89,112]])],cue:[96,292]},
  {id:'circle',name:'Reds Round the Blue',type:'break',level:'Intermediate',
   short:'8 reds in a circle around the blue. Cue-ball control in the open.',
-  setup:'Put the blue on its spot with 8 reds in a circle around it, roughly a cue ball’s width from the blue. Place the pink and black on their spots. Cue ball starts near the baulk line.',
+  setup:'Put the blue on its spot with 8 reds in a circle around it, roughly a cue ball’s width from the blue. Place the pink and black on their spots.'+HAND,
   play:'Pot each red, then the black, pink or blue, and work your way round the circle. Try not to disturb the blue until the reds have gone.',
   score:'Each attempt is one break. All 8 reds with blacks, then blue, pink and black, is 82.',
-  balls:[[...SP.blue,'blue'],[...SP.pink,'pink'],[...SP.black,'black'],...[0,45,90,135,180,225,270,315].map(a=>[89+11*Math.cos(a*Math.PI/180),178.5+11*Math.sin(a*Math.PI/180),'red'])],cue:[70,250]},
+  balls:[[...SP.blue,'blue'],[...SP.pink,'pink'],[...SP.black,'black'],...[0,45,90,135,180,225,270,315].map(a=>[89+11*Math.cos(a*Math.PI/180),178.5+11*Math.sin(a*Math.PI/180),'red'])],cue:[78,292]},
  {id:'long-blue',name:'Long Blue',type:'attempts',of:10,level:'All levels',
-  short:'Long pot of the blue off its spot into a top corner.',
-  setup:'Put the blue on its spot. Place the cue ball on the baulk line, in line with the blue and the far top-left corner pocket (about two-thirds of the way from the brown to the side cushion).',
-  play:'Pot the blue into the top-left corner. Re-spot both balls each time. Watch your cue action: stay down on the shot and follow straight through.',
+  short:'The blue off its spot into a top corner, from the D.',
+  setup:'Put the blue on its spot.'+HAND+' A spot towards the yellow side of the D gives a gentle cut into the top-left corner.',
+  play:'Pot the blue into a top corner. Re-spot the blue and take ball in hand again each time. Stay down on the shot and follow straight through. Move the cue ball around the D to practise different angles.',
   score:'Ten attempts. Tap Potted or Missed after each shot.',
-  balls:[[...SP.blue,'blue']],cue:[141.1,283.3],aim:[[141.1,283.3],[0,0]]},
- {id:'straight-black',name:'Straight Black',type:'attempts',of:10,level:'All levels',
-  short:'A straight black into the corner. Builds a reliable cue action.',
-  setup:'Put the black on its spot. Place the cue ball dead straight behind it, in line with the top-right corner pocket, about a cue-ball-to-pink distance away.',
-  play:'Pot the black into the top-right corner. Once you can do 8 or more, move the cue ball further back, or play it with stun and screw back.',
+  balls:[[...SP.blue,'blue']],cue:[110,292],aim:[[110,292],[89,178.5],[0,0]]},
+ {id:'long-pink',name:'Long Pink',type:'attempts',of:10,level:'Intermediate',
+  short:'The pink off its spot into a top corner, from the D.',
+  setup:'Put the pink on its spot.'+HAND+' From the green side of the D it’s a cut into the top-right corner; from the yellow side, into the top-left.',
+  play:'Pot the pink into a top corner. Re-spot it and take ball in hand again each time. It’s a long cut, so focus on the contact point and a smooth, straight cue action.',
   score:'Ten attempts. Tap Potted or Missed after each shot.',
-  balls:[[...SP.black,'black']],cue:[53.4,45.4],aim:[[53.4,45.4],[178,0]]},
+  balls:[[...SP.pink,'pink']],cue:[66,292],aim:[[66,292],[89,89.25],[178,0]]},
  {id:'pink-cut',name:'Pink Cut to the Middle',type:'attempts',of:10,level:'Intermediate',
-  short:'Thin-ish cut of the pink into a middle pocket.',
-  setup:'Put the pink on the blue spot. Place the cue ball about 25 cm towards the top cushion and slightly off-line, so the pink needs a cut into the right-hand middle pocket.',
-  play:'Cut the pink into the right middle pocket. Vary the angle as you improve. Concentrate on hitting the right contact point rather than the pocket.',
+  short:'Cut the pink into a middle pocket from the D.',
+  setup:'Place the pink about a third of the way from the right-hand middle pocket towards the yellow spot.'+HAND+' Start from the green side of the D for a gentle angle.',
+  play:'Cut the pink into the right-hand middle pocket. As you improve, move the cue ball towards the yellow side of the D to make the cut thinner. Concentrate on hitting the right contact point rather than looking at the pocket.',
   score:'Ten attempts. Tap Potted or Missed after each shot.',
-  balls:[[...SP.blue,'pink']],cue:[72,150],aim:[[72,150],[178,178.5]]}
+  balls:[[140,214,'pink']],cue:[70,294],aim:[[70,294],[140,214],[178,178.5]]}
 ];
 const drillById=id=>DRILLS.find(d=>d.id===id);
 function tableSVG(d,small){
@@ -964,13 +965,13 @@ function tableSVG(d,small){
   const pk=[[0,0],[178,0],[0,178.5],[178,178.5],[0,357],[178,357]];
   const ball=(x,y,c)=>`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${R}" fill="${BCOL[c]}" stroke="${c==='black'?'#555':'rgba(0,0,0,.35)'}" stroke-width=".6"/>`;
   let aim='';
-  if(d.aim&&!small){const [[x1,y1],[x2,y2]]=d.aim;aim=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-dasharray="3 3"/>`;}
+  if(d.aim&&!small){const pts=d.aim;aim=pts.slice(1).map((q,i)=>{const p0=pts[i];return `<line x1="${p0[0]}" y1="${p0[1]}" x2="${q[0]}" y2="${q[1]}" stroke="rgba(255,255,255,${i?'.75':'.5'})" stroke-width="1" stroke-dasharray="${i?'1.5 2.5':'3 3'}"/>`;}).join('');}
   return `<svg viewBox="-9 -9 196 375" class="${small?'tbl-s':'tbl'}" role="img" aria-label="Table layout for ${esc(d.name)}">
     <rect x="-9" y="-9" width="196" height="375" rx="7" fill="#4a2c17"/>
     <rect x="-3" y="-3" width="184" height="363" rx="3" fill="#0d5a38"/>
     <rect x="0" y="0" width="178" height="357" fill="#127046"/>
     <line x1="0" y1="283.3" x2="178" y2="283.3" stroke="rgba(255,255,255,.55)" stroke-width=".7"/>
-    <path d="M59.8 283.3 A29.2 29.2 0 0 0 118.2 283.3" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".7"/>
+    <path d="M59.8 283.3 A29.2 29.2 0 0 0 118.2 283.3 Z" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.55)" stroke-width=".7"/>
     ${Object.values(SP).map(([x,y])=>`<circle cx="${x}" cy="${y}" r=".9" fill="rgba(255,255,255,.6)"/>`).join('')}
     ${pk.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="5.2" fill="#050505"/>`).join('')}
     ${aim}${d.balls.map(([x,y,c])=>ball(x,y,c)).join('')}${d.cue?ball(d.cue[0],d.cue[1],'cue'):''}
@@ -1005,7 +1006,7 @@ function vDrill(id){
   const d=drillById(id);if(!d)return `<p class="empty">Drill not found.</p>`;
   const pid=pracPlayer();
   let h=`<div class="top"><button class="back" data-act="tab" data-v="practice">‹ Practice</button></div><h1>${esc(d.name)}</h1>`;
-  h+=`<div class="drillgrid"><div>${tableSVG(d,false)}<div class="small muted" style="text-align:center;margin-top:4px">White is the cue ball.${d.aim?' Dashed line shows the shot.':''}</div></div>
+  h+=`<div class="drillgrid"><div>${tableSVG(d,false)}<div class="small muted" style="text-align:center;margin-top:4px">Cue ball in hand: anywhere in the shaded D.${d.aim?' Dotted lines show the shot.':''}</div></div>
     <div><h2 style="margin-top:0">Set up</h2><p class="dtext">${esc(d.setup)}</p><h2>How to play</h2><p class="dtext">${esc(d.play)}</p><h2>Scoring</h2><p class="dtext">${esc(d.score)}</p></div></div>`;
   if(pid){
     h+=pracPlayerSelect(pid)+`<button class="btn primary" data-act="startDrill" data-id="${d.id}">Start practice</button>`;
