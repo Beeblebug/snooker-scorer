@@ -130,7 +130,7 @@ td.better{color:var(--accent);font-weight:700}
 .coin.spin{animation:flip 1.4s cubic-bezier(.2,.7,.3,1)}
 @keyframes flip{0%{transform:translateY(0) rotateX(0)}45%{transform:translateY(-70px) rotateX(1080deg)}100%{transform:translateY(0) rotateX(1800deg)}}
 .tossres{text-align:center;font-size:20px;font-weight:700;min-height:28px}
-.pill{display:inline-block;font-size:13px;padding:5px 11px;border-radius:999px;background:var(--card);margin:-6px 0 10px;border:1px solid var(--line)}.pill.ok{color:var(--good)}.pill.warn{color:var(--accent)}
+.pill{display:inline-block;font-family:inherit;cursor:pointer;font-size:13px;padding:5px 11px;border-radius:999px;background:var(--card);margin:-6px 0 10px;border:1px solid var(--line)}.pill.ok{color:var(--good)}.pill.warn{color:var(--accent)}
 .code{font-size:34px;font-weight:800;letter-spacing:.12em;text-align:center;background:var(--card);border-radius:14px;padding:16px;margin:8px 0 12px;font-variant-numeric:tabular-nums;user-select:all;-webkit-user-select:all}
 .twobtn{display:grid;grid-template-columns:1fr 1fr;gap:8px}.twobtn .btn{margin:0}
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
@@ -314,7 +314,7 @@ function syncPill(){
   else if(!navigator.onLine){t=S.sync.pending?'Offline · changes will sync':'Offline';c='warn';}
   else if(S.sync.state==='connecting'||S.sync.pending){t='Syncing…';c='warn';}
   else t='Synced';
-  return `<div class="pill ${c}">● ${esc(S.group.name)} · ${t}</div>`;
+  return `<button class="pill ${c}" data-act="tab" data-v="settings">● ${esc(S.group.name)} · ${t}</button>`;
 }
 window.addEventListener('online',()=>{if(S.group&&S.sync.state==='needsignin')startGroupSync(S.group);else render();});
 window.addEventListener('offline',()=>render());
@@ -502,12 +502,13 @@ function playerAgg(pid){
 const ICONS={
   home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/></svg>',
   history:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   players:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14c2.5 0 4.4 1.4 5 4"/></svg>'
 };
 function tabbar(){
-  const t=S.view==='history'||S.view==='match'?'history':(S.view==='players'||S.view==='player'?'players':'home');
+  const t=S.view==='history'||S.view==='match'?'history':(S.view==='players'||S.view==='player'?'players':(S.view==='settings'?'settings':'home'));
   const b=(v,l)=>`<button class="${t===v?'on':''}" data-act="tab" data-v="${v}">${ICONS[v]}<span>${l}</span></button>`;
-  return `<nav class="tabbar">${b('home','Play')}${b('history','History')}${b('players','Players')}</nav>`;
+  return `<nav class="tabbar">${b('home','Play')}${b('history','History')}${b('players','Players')}${b('settings','Settings')}</nav>`;
 }
 function banner(){
   let h='';
@@ -521,28 +522,33 @@ function installHint(){
   if(isIOS)return `<div class="banner">To use offline: tap the Share button, then <b>Add to Home Screen</b>, and open Snooker from there. Your data is kept on this device.</div>`;
   return '';
 }
-function backupSection(){
-  const lb=lastBackup();
-  const n=Object.keys(S.matches).length;
-  const stale=n>0&&(!lb||Date.now()-lb>14*864e5);
-  let h='';
-  if(fbConfigured()){
-    h+=`<h2>Sync</h2><div class="card" style="cursor:default">`;
-    if(S.group){
-      h+=`<div class="prow"><span class="nm">${esc(S.group.name)}</span><span class="rt">Code ${fmtCode(S.group.id)}</span></div>
-        <div class="small muted" style="margin:6px 0 10px">Everyone in this group shares the same players, matches and stats. Scoring works offline and syncs when there’s a connection.</div>
-        <div class="twobtn"><button class="btn" data-act="showCode">Invite</button><button class="btn ghost" data-act="askLeave">Leave group</button></div>`;
-    }else{
-      h+=`<div class="small muted" style="margin-bottom:10px">Share players, matches and stats with the people you play. Create a group, then send them its code. Scoring still works offline and catches up when there’s a connection.</div>
-        <div class="twobtn"><button class="btn" data-act="askCreate">Create a group</button><button class="btn ghost" data-act="askJoin">Join a group</button></div>`;
-    }
-    h+=`</div>`;
+function syncCard(){
+  if(!fbConfigured())return '';
+  let h=`<h2>Sync</h2><div class="card" style="cursor:default">`;
+  if(S.group){
+    h+=`<div class="prow"><span class="nm">${esc(S.group.name)}</span><span class="rt">Code ${fmtCode(S.group.id)}</span></div>
+      <div class="small muted" style="margin:6px 0 10px">Everyone in this group shares the same players, matches and stats. Scoring works offline and syncs when there’s a connection.</div>
+      <div class="twobtn"><button class="btn" data-act="showCode">Invite</button><button class="btn ghost" data-act="askLeave">Leave group</button></div>`;
+  }else{
+    h+=`<div class="small muted" style="margin-bottom:10px">Share players, matches and stats with the people you play. Create a group, then send them its code. Scoring still works offline and catches up when there’s a connection.</div>
+      <div class="twobtn"><button class="btn" data-act="askCreate">Create a group</button><button class="btn ghost" data-act="askJoin">Join a group</button></div>`;
   }
-  h+=`<h2>Backup</h2><div class="card" style="cursor:default">
+  return h+`</div>`;
+}
+const backupStale=()=>{const lb=lastBackup();return Object.keys(S.matches).length>0&&(!lb||Date.now()-lb>14*864e5);};
+function backupCard(){
+  const lb=lastBackup(),n=Object.keys(S.matches).length;
+  return `<h2>Backup</h2><div class="card" style="cursor:default">
     <div class="small muted">${S.group?'Your group’s data is kept in the cloud and on this device. A backup file is an extra copy you control.':'Everything is saved on this device only, and works with no internet. Back up now and then so you don’t lose your history if the phone is lost or replaced.'}</div>
-    <div class="small" style="margin:8px 0;${stale?'color:var(--accent)':''}">${lb?'Last backup: '+fmtDate(lb):'Not backed up yet'}</div>
+    <div class="small" style="margin:8px 0;${backupStale()?'color:var(--accent)':''}">${lb?'Last backup: '+fmtDate(lb):'Not backed up yet'}</div>
     <div class="twobtn"><button class="btn" data-act="export" ${n||Object.keys(S.players).length?'':'disabled'}>Back up</button><button class="btn ghost" data-act="importPick">Restore</button></div>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none"></div>`;
+}
+function vSettings(){
+  let h=`<h1>Settings</h1>`+banner();
+  if(!S.ready)return h+`<p class="empty">Loading…</p>`;
+  h+=syncCard()+backupCard();
+  const ih=installHint();if(ih)h+=`<h2>Install</h2>`+ih;
   return h;
 }
 function matchCard(m){
@@ -558,6 +564,7 @@ function sortedPlayers(){return Object.values(S.players).sort((a,b)=>a.name.loca
 
 function vHome(){
   let h=`<h1>Snooker Scorer</h1>`+syncPill()+banner()+installHint();
+  if(S.ready&&!S.group&&backupStale())h+=`<button class="banner" style="display:block;width:100%;text-align:left" data-act="tab" data-v="settings">You haven’t backed up in a while. Back up in Settings ›</button>`;
   if(!S.ready)return h+`<p class="empty">Loading…</p>`;
   const all=sortedMatches();
   const live=all.filter(m=>m.status==='live');
@@ -575,7 +582,7 @@ function vHome(){
   }else if(!live.length){
     h+=`<p class="empty">Add your players, start a match and score it shot by shot. Every frame, break and foul is saved to build up each player’s stats.</p>`;
   }
-  h+=backupSection();
+  if(!S.group)h+=syncCard();
   return h;
 }
 
@@ -738,6 +745,7 @@ function render(){
   else if(v==='match')h=vMatch(S.matches[S.param]);
   else if(v==='players')h=vPlayers();
   else if(v==='player')h=vPlayer(S.param);
+  else if(v==='settings')h=vSettings();
   else h=vHome();
   const keep=document.getElementById('addName');const keepVal=keep?keep.value:'';const hadFocus=keep&&document.activeElement===keep;
   const scoring=v==='score'&&S.matches[S.param]&&S.matches[S.param].current;
