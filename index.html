@@ -75,11 +75,12 @@ select,input[type=text]{width:100%;background:var(--card);border:1px solid var(-
 .ball.dark{color:#2a2208}
 .ball:disabled,.redbtn:disabled{opacity:.16}
 .ball.next{outline:3px solid var(--accent);outline-offset:3px}
-.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
-.actions button{border:none;border-radius:14px;padding:14px 2px;font-size:15px;font-weight:600;background:var(--card2)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.actions button{border:none;border-radius:16px;padding:28px 4px;font-size:20px;font-weight:600;background:var(--card2)}
+.actions .esc{background:rgba(143,214,165,.16);color:var(--good)}
 .actions .foul{background:rgba(239,123,98,.16);color:var(--danger)}
 .actions button:disabled{opacity:.35}
-.undo{grid-column:1/-1;background:transparent!important;border:1px solid var(--line)!important;font-weight:500!important}
+.undo{grid-column:1/-1;background:transparent!important;border:1px solid var(--line)!important;font-weight:500!important;padding:13px 4px!important;font-size:16px!important}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:13px}
 .chip b{font-variant-numeric:tabular-nums}
@@ -410,7 +411,8 @@ async function importData(file){
 }
 
 /* ---------- scoring engine ---------- */
-const newStats=()=>({pots:0,miss:0,saf:0,snk:0,fouls:0,foulPts:0,visits:0,shots:0,time:0});
+const newStats=()=>({pots:0,miss:0,saf:0,snk:0,esc:0,escAtt:0,fouls:0,foulPts:0,visits:0,shots:0,time:0});
+function escapeResult(f,ok){if(!f.snookered)return;const s=f.stats[f.turn];s.escAtt=(s.escAtt||0)+1;if(ok)s.esc=(s.esc||0)+1;f.snookered=false;}
 function newFrame(breaker,hc){const h=hc||[0,0],now=Date.now();return {breaker,turn:breaker,scores:[h[0],h[1]],start:[h[0],h[1]],reds:15,phase:'red',next:2,cur:{pts:0,balls:[]},breaks:[],stats:[newStats(),newStats()],winner:null,conceded:false,freeBall:false,lastShotAt:now,startedAt:now,endedAt:null};}
 const fstart=(f,i)=>f.start?f.start[i]||0:0;
 function remaining(f){
@@ -466,6 +468,7 @@ function doPot(m,v){
   const f=m.current;if(!allowed(f,v))return;
   act(m,f=>{
     const t=f.turn;
+    escapeResult(f,true);
     if(f.freeBall){f.freeBall=false;
       if(f.phase==='red'&&v>=2){f.scores[t]+=1;f.cur.pts+=1;f.cur.balls.push(1);f.stats[t].pots++;f.phase='colour';return;}
       if(f.phase==='clear'&&v!==f.next){const val=f.next;f.scores[t]+=val;f.cur.pts+=val;f.cur.balls.push(val);f.stats[t].pots++;return;}
@@ -485,13 +488,16 @@ function doPot(m,v){
 function doEndTurn(m,kind){
   if(m.current.winner!=null)return;
   act(m,f=>{
+    escapeResult(f,kind==='escape');
     if(kind==='miss')f.stats[f.turn].miss++;else if(kind==='safety')f.stats[f.turn].saf++;else if(kind==='snooker')f.stats[f.turn].snk=(f.stats[f.turn].snk||0)+1;
     f.freeBall=false;closeBreak(f);leaveColour(f);f.turn=1-f.turn;
+    if(kind==='snooker')f.snookered=true;
   },true);
 }
 function doFoul(m,value,redsOff,again,freeBall){
   if(m.current.winner!=null)return;
   act(m,f=>{
+    escapeResult(f,false);
     const t=f.turn,o=1-t;f.freeBall=false;
     f.scores[o]+=value;f.stats[t].fouls++;f.stats[t].foulPts+=value;
     closeBreak(f);
@@ -503,7 +509,7 @@ function doFoul(m,value,redsOff,again,freeBall){
 }
 function doConcede(m,who){
   if(m.current.winner!=null)return;
-  act(m,f=>{f.conceded=true;endFrame(f,1-who);});
+  act(m,f=>{f.snookered=false;f.conceded=true;endFrame(f,1-who);});
 }
 function doUndo(m){
   const st=undoStacks[m.id];
@@ -573,16 +579,16 @@ function seasonSelect(){const cur=S.settings.season||'all';return `<select data-
 
 /* ---------- stats ---------- */
 function matchSide(m,i){
-  const a={pts:0,pots:0,miss:0,saf:0,snk:0,fouls:0,foulPts:0,hb:0,b20:0,b50:0,b100:0,nb:0,bpts:0,fw:0,fp:0,shots:0,time:0};
+  const a={pts:0,pots:0,miss:0,saf:0,snk:0,esc:0,escAtt:0,mb:0,fouls:0,foulPts:0,hb:0,b20:0,b50:0,b100:0,nb:0,bpts:0,fw:0,fp:0,shots:0,time:0};
   m.frames.forEach(f=>{
     a.fp++;if(f.winner===i)a.fw++;a.pts+=f.scores[i]-fstart(f,i);
-    const s=f.stats[i];a.pots+=s.pots;a.miss+=s.miss;a.saf+=s.saf;a.snk+=s.snk||0;a.fouls+=s.fouls;a.foulPts+=s.foulPts;a.shots+=s.shots||0;a.time+=s.time||0;
-    f.breaks.forEach(b=>{if(b.p!==i)return;a.hb=Math.max(a.hb,b.pts);if(b.pts>=20){a.b20++;a.nb++;a.bpts+=b.pts;}if(b.pts>=50)a.b50++;if(b.pts>=100)a.b100++;});
+    const s=f.stats[i];a.pots+=s.pots;a.miss+=s.miss;a.saf+=s.saf;a.snk+=s.snk||0;a.fouls+=s.fouls;a.foulPts+=s.foulPts;a.shots+=s.shots||0;a.time+=s.time||0;a.esc+=s.esc||0;a.escAtt+=s.escAtt||0;
+    f.breaks.forEach(b=>{if(b.p!==i)return;a.hb=Math.max(a.hb,b.pts);a.mb=Math.max(a.mb,(b.balls||[]).length);if(b.pts>=20){a.b20++;a.nb++;a.bpts+=b.pts;}if(b.pts>=50)a.b50++;if(b.pts>=100)a.b100++;});
   });
   return a;
 }
 function playerAgg(pid,useSeason,skip){
-  const a={mp:0,mw:0,ml:0,fp:0,fw:0,pts:0,pots:0,miss:0,saf:0,snk:0,fouls:0,foulPts:0,hb:0,b20:0,b50:0,b100:0,nb:0,bpts:0,shots:0,time:0,vs:{},list:[]};
+  const a={mp:0,mw:0,ml:0,fp:0,fw:0,pts:0,pots:0,miss:0,saf:0,snk:0,esc:0,escAtt:0,mb:0,fouls:0,foulPts:0,hb:0,b20:0,b50:0,b100:0,nb:0,bpts:0,shots:0,time:0,vs:{},list:[]};
   Object.values(S.matches).forEach(m=>{
     if(skip&&skip===m.id)return;
     if(useSeason&&!inSeason(m))return;
@@ -592,8 +598,8 @@ function playerAgg(pid,useSeason,skip){
     if(m.status==='complete'){a.mp++;if(m.winner===i){a.mw++;v.w++;}else if(m.winner===1-i){a.ml++;v.l++;}else v.d++;}
     const s=matchSide(m,i);
     v.fw+=s.fw;v.fl+=s.fp-s.fw;
-    ['fp','fw','pts','pots','miss','saf','snk','fouls','foulPts','b20','b50','b100','nb','bpts','shots','time'].forEach(k=>a[k]+=s[k]);
-    a.hb=Math.max(a.hb,s.hb);
+    ['fp','fw','pts','pots','miss','saf','snk','fouls','foulPts','b20','b50','b100','nb','bpts','shots','time','esc','escAtt'].forEach(k=>a[k]+=s[k]);
+    a.hb=Math.max(a.hb,s.hb);a.mb=Math.max(a.mb,s.mb);
   });
   a.list.sort((x,y)=>(y.startedAt||0)-(x.startedAt||0));
   return a;
@@ -720,6 +726,7 @@ function vNew(){
 
 function phaseHint(f){
   if(f.winner!=null)return '';
+  if(f.snookered)return `<b style="color:var(--accent)">Snookered</b> · Escape or Foul — or tap the ball if one goes in`;
   if(f.freeBall)return `<b style="color:var(--accent)">Free ball</b> · tap the colour nominated (scores ${f.phase==='red'?1:f.next}), or play the ${f.phase==='red'?'red':BALL_NAME(f.next).toLowerCase()} as normal`;
   if(f.phase==='red')return 'On a <b>red</b>';
   if(f.phase==='colour')return f.reds>0||f.cur.balls[f.cur.balls.length-1]===1?'On a <b>colour</b>'+(f.cur.balls[f.cur.balls.length-1]===1&&f.reds>0?' · tap red again if two went in':''):'On a <b>colour</b>';
@@ -755,7 +762,7 @@ function vScore(m){
     h+=`<div class="hint">${phaseHint(f)}</div>`;
     h+=`<button class="redbtn" data-act="pot" data-v="1" ${allowed(f,1)?'':'disabled'}>Red · 1</button>`;
     h+=`<div class="colours">`+BALLS.slice(1).map(b=>`<button class="ball ${b.dark?'dark':''} ${f.phase==='clear'&&f.next===b.v?'next':''}" style="background:radial-gradient(circle at 32% 30%, ${b.c}ee, ${b.c} 55%, #0008 140%)${b.v===7?';border:1px solid #444':''}" data-act="pot" data-v="${b.v}" aria-label="${b.n}" ${allowed(f,b.v)?'':'disabled'}>${b.v}</button>`).join('')+`</div>`;
-    h+=`<div class="actions"><button data-act="miss">Miss</button><button data-act="safety">Safety</button><button data-act="snooker">Snooker</button><button class="foul" data-act="foul">Foul</button><button class="undo" data-act="undo" ${undoStacks[m.id]&&undoStacks[m.id].length?'':'disabled'}>↶ Undo</button></div>`;
+    h+=`<div class="actions">${f.snookered?`<button class="esc" data-act="escape">Escape</button><button class="foul" data-act="foul">Foul</button>`:`<button data-act="miss">Miss</button><button data-act="safety">Safety</button><button data-act="snooker">Snooker</button><button class="foul" data-act="foul">Foul</button>`}<button class="undo" data-act="undo" ${undoStacks[m.id]&&undoStacks[m.id].length?'':'disabled'}>↶ Undo</button></div>`;
   }
   const br=f.breaks.slice().reverse().filter(b=>b.pts>=10);
   if(br.length)h+=`<h2>Breaks this frame (10+)</h2><div class="chips">`+br.map(b=>`<span class="chip">${esc(n[b.p])} <b>${b.pts}</b></span>`).join('')+`</div>`;
@@ -767,9 +774,9 @@ function statRows(m){
   const a=[matchSide(m,0),matchSide(m,1)];
   const rows=[
     ['Frames won',x=>x.fw,1],['Total points',x=>x.pts,1],['Avg pts / frame',x=>x.fp?Math.round(x.pts/x.fp):0,1],
-    ['Highest break',x=>x.hb,1],['20+ breaks',x=>x.b20,1],['50+ breaks',x=>x.b50,1],['Centuries',x=>x.b100,1],
+    ['Highest break',x=>x.hb,1],['Most balls in a break',x=>x.mb,1],['20+ breaks',x=>x.b20,1],['50+ breaks',x=>x.b50,1],['Centuries',x=>x.b100,1],
     ['Balls potted',x=>x.pots,1],['Pot success',x=>x.pots+x.miss?Math.round(x.pots*100/(x.pots+x.miss)):null,1,'%'],
-    ['Avg shot time',x=>x.shots?Math.round(x.time/x.shots/1000):null,0,'s'],['Safeties',x=>x.saf,0],['Snookers laid',x=>x.snk,0],['Fouls',x=>x.fouls,-1],['Foul points given',x=>x.foulPts,-1],['Avg foul pts / frame',x=>x.fp?Math.round(x.foulPts*10/x.fp)/10:null,-1]
+    ['Avg shot time',x=>x.shots?Math.round(x.time/x.shots/1000):null,0,'s'],['Safeties',x=>x.saf,0],['Snookers laid',x=>x.snk,0],['Snooker escapes',x=>x.escAtt?x.esc+'/'+x.escAtt:null,0],['Escape success',x=>x.escAtt?Math.round(x.esc*100/x.escAtt):null,1,'%'],['Fouls',x=>x.fouls,-1],['Foul points given',x=>x.foulPts,-1],['Avg foul pts / frame',x=>x.fp?Math.round(x.foulPts*10/x.fp)/10:null,-1]
   ];
   return rows.map(([k,fn,dir,suf])=>{
     const v=[fn(a[0]),fn(a[1])];
@@ -1134,9 +1141,9 @@ function vPlayer(pid){
   const tile=(v,k)=>`<div class="tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
   h+=`<div class="tiles">`+
     tile(a.mp?`${a.mw}–${a.ml}`:'–','Matches W–L')+tile(pct(a.mw,a.mp),'Match win %')+tile(a.fp?`${a.fw}–${a.fp-a.fw}`:'–','Frames W–L')+
-    tile(pct(a.fw,a.fp),'Frame win %')+tile(a.hb||'–','Highest break')+tile(a.nb?Math.round(a.bpts/a.nb):'–','Avg 20+ break')+
+    tile(pct(a.fw,a.fp),'Frame win %')+tile(a.hb||'–','Highest break')+tile(a.mb||'–','Most balls in a break')+tile(a.nb?Math.round(a.bpts/a.nb):'–','Avg 20+ break')+
     tile(a.b20,'20+ breaks')+tile(a.b50,'50+ breaks')+tile(a.b100,'Centuries')+
-    tile(a.fp?Math.round(a.pts/a.fp):'–','Avg pts / frame')+tile(pct(a.pots,a.pots+a.miss),'Pot success')+tile(a.fp?(a.fouls/a.fp).toFixed(1):'–','Fouls / frame')+tile(a.fp?(a.foulPts/a.fp).toFixed(1):'–','Avg foul pts / frame')+tile(a.pots,'Balls potted')+tile(a.saf,'Safeties')+tile(a.snk,'Snookers laid')+tile(a.shots?Math.round(a.time/a.shots/1000)+'s':'–','Avg shot time')+tile(a.fp?fmtDur(a.list.reduce((t,m)=>t+m.frames.reduce((u,f)=>u+(f.endedAt&&f.startedAt?f.endedAt-f.startedAt:0),0),0)/a.fp):'–','Avg frame time')+
+    tile(a.fp?Math.round(a.pts/a.fp):'–','Avg pts / frame')+tile(pct(a.pots,a.pots+a.miss),'Pot success')+tile(a.fp?(a.fouls/a.fp).toFixed(1):'–','Fouls / frame')+tile(a.fp?(a.foulPts/a.fp).toFixed(1):'–','Avg foul pts / frame')+tile(a.pots,'Balls potted')+tile(a.saf,'Safeties')+tile(a.snk,'Snookers laid')+tile(a.escAtt?a.esc+'/'+a.escAtt:'–','Snooker escapes')+tile(pct(a.esc,a.escAtt),'Escape success')+tile(a.shots?Math.round(a.time/a.shots/1000)+'s':'–','Avg shot time')+tile(a.fp?fmtDur(a.list.reduce((t,m)=>t+m.frames.reduce((u,f)=>u+(f.endedAt&&f.startedAt?f.endedAt-f.startedAt:0),0),0)/a.fp):'–','Avg frame time')+
     `</div>`;
   h+=playerCharts(pid,a.list);
   const vs=Object.entries(a.vs).sort((x,y)=>(y[1].w+y[1].l+y[1].d)-(x[1].w+x[1].l+x[1].d));
@@ -1250,6 +1257,7 @@ const ACTIONS={
   miss:()=>{const m=curMatch();if(m){doEndTurn(m,'miss');render();}},
   safety:()=>{const m=curMatch();if(m){doEndTurn(m,'safety');render();}},
   snooker:()=>{const m=curMatch();if(m){doEndTurn(m,'snooker');render();}},
+  escape:()=>{const m=curMatch();if(m){doEndTurn(m,'escape');render();}},
   foul:()=>{const m=curMatch();if(m&&m.current.winner==null){foulDraft={reds:0,again:false};foulSheet(m);}},
   fr:el=>{const m=curMatch();const max=m?m.current.reds:15;foulDraft.reds=Math.max(0,Math.min(max,foulDraft.reds+(+el.dataset.d)));const b=document.getElementById('frv');if(b)b.textContent=foulDraft.reds;},
   foulVal:el=>{const m=curMatch();if(!m)return;const ag=document.getElementById('fagain'),fr=document.getElementById('ffree');doFoul(m,+el.dataset.v,foulDraft.reds,!!(ag&&ag.checked),!!(fr&&fr.checked));closeSheet();render();},
@@ -1257,7 +1265,7 @@ const ACTIONS={
   nextFrame:()=>{const m=curMatch();if(m){nextFrame(m);render();}},
   setTurn:el=>{const m=curMatch();if(!m||!m.current||m.current.winner!=null)return;const i=+el.dataset.i;if(m.current.turn===i)return;
     if(m.current.cur.pts>0){toast('Tap Miss or Safety to end the break');return;}
-    act(m,f=>{f.stats[f.turn].visits++;leaveColour(f);f.turn=i;});render();},
+    act(m,f=>{f.snookered=false;f.stats[f.turn].visits++;leaveColour(f);f.turn=i;});render();},
   board:()=>{const m=curMatch();if(!m)return;go('board',m.id);try{const de=document.documentElement;if(de.requestFullscreen)de.requestFullscreen().catch(()=>{});}catch(e){}},
   share:el=>{const m=S.matches[el.dataset.id];if(m)shareResult(m);},
   edit:el=>{const m=S.matches[el.dataset.id];if(!m)return;S.edit={id:m.id,p:m.p.slice(),frames:clone(m.frames)};editSheet();},
@@ -1291,7 +1299,7 @@ const ACTIONS={
   askDelSess:el=>sheet(`<h3>Delete this session?</h3><p>It will be removed from the practice history.</p><button class="btn danger" data-act="delSess" data-id="${esc(el.dataset.id)}">Delete</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`),
   delSess:el=>{const id=el.dataset.id;delete S.practice[id];removeDoc('matches',id);closeSheet();render();},
   menu:()=>{const m=curMatch();if(m)menuSheet(m);},
-  swap:()=>{const m=curMatch();if(!m)return;act(m,f=>{closeBreak(f);leaveColour(f);f.turn=1-f.turn;});closeSheet();render();},
+  swap:()=>{const m=curMatch();if(!m)return;act(m,f=>{f.snookered=false;closeBreak(f);leaveColour(f);f.turn=1-f.turn;});closeSheet();render();},
   concede:el=>{const m=curMatch();if(!m)return;doConcede(m,+el.dataset.i);closeSheet();render();},
   askFinish:()=>{const m=curMatch();if(!m)return;const inProg=m.current&&m.current.winner==null&&(m.current.scores[0]||m.current.scores[1]);
     sheet(`<h3>Finish match now?</h3><p>The result will be recorded on frames won (${framesWon(m,0)}–${framesWon(m,1)}).${inProg?' The frame in progress won’t count.':''}</p><button class="btn primary" data-act="finish">Finish match</button><button class="btn ghost" data-act="closeSheet">Cancel</button>`);},
